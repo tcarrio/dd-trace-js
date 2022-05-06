@@ -6,19 +6,11 @@ const {
   AsyncResource
 } = require('../helpers/instrument')
 const shimmer = require('../../../datadog-shimmer')
+const kinds = require('./kinds')
 
 const startCh = channel('apm:grpc:client:start')
 const errorCh = channel('apm:grpc:client:error')
 const statusCh = channel('apm:grpc:client:status')
-
-const kinds = {
-  unary: 'unary',
-  bidi: 'bidi_streaming',
-  client_stream: 'client_streaming',
-  clientStream: 'client_streaming',
-  server_stream: 'server_streaming',
-  serverStream: 'server_streaming'
-}
 
 const patched = new WeakSet()
 const instances = new WeakMap()
@@ -216,7 +208,7 @@ function wrapPackageDefinition (def) {
   }
 }
 
-addHook({ name: '@grpc/jrpc-js', versions: ['>=1.0.3'], file: 'build/src/make-client.js' }, client => {
+addHook({ name: '@grpc/grpc-js', versions: ['>=1.0.3'], file: 'build/src/make-client.js' }, client => {
   shimmer.wrap(client, 'makeClientConstructor', makeClientConstructor => {
     return function wrapped (methods) {
       const ServiceClient = makeClientConstructor.apply(this, arguments)

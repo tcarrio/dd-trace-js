@@ -2,9 +2,8 @@
 
 const agent = require('../../dd-trace/test/plugins/agent')
 const getPort = require('get-port')
-const plugin = require('../src/server')
 const Readable = require('stream').Readable
-const kinds = require('../src/kinds')
+const kinds = require('../../datadog-instrumentations/src/grpc/kinds')
 const pkgs = ['grpc', '@grpc/grpc-js']
 
 describe('Plugin', () => {
@@ -60,7 +59,7 @@ describe('Plugin', () => {
       server.forceShutdown()
     })
 
-    withVersions(plugin, pkgs, (version, pkg) => {
+    withVersions('grpc', pkgs, (version, pkg) => {
       describe('without configuration', () => {
         before(() => {
           return agent.load('grpc', { client: false })
@@ -71,7 +70,7 @@ describe('Plugin', () => {
         })
 
         after(() => {
-          return agent.close()
+          return agent.close({ ritmReset: false })
         })
 
         it('should handle `unary` calls', async () => {
@@ -321,7 +320,7 @@ describe('Plugin', () => {
         })
 
         after(() => {
-          return agent.close()
+          return agent.close({ ritmReset: false })
         })
 
         it('should be configured with the correct values', async () => {
@@ -356,7 +355,7 @@ describe('Plugin', () => {
         })
 
         after(() => {
-          return agent.close()
+          return agent.close({ ritmReset: false })
         })
 
         it('should handle request metadata', async () => {
