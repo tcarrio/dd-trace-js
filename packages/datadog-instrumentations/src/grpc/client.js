@@ -105,7 +105,7 @@ function callMethod (client, method, args, path, metadata, methodKind) {
   })
 }
 
-function wrapMakeRequest(methodKind) {
+function wrapMakeRequest (methodKind) {
   return function (makeRequest) {
     return function wrapped (path) {
       const args = ensureMetadata(this, arguments, 4)

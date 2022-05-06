@@ -19,7 +19,7 @@ function isEmitter (obj) {
   return typeof obj.emit === 'function' && typeof obj.once === 'function'
 }
 
-function wrapSendStatus (sendStatus, span) {
+function wrapSendStatus (sendStatus) {
   return function sendStatusWithTrace (status) {
     statusCodeCh.publish(status.code)
     return sendStatus.apply(this, arguments)
@@ -30,7 +30,7 @@ function wrapStream (call, ar) {
   const emit = call.emit
 
   if (call.call && call.call.sendStatus) {
-    call.call.sendStatus = wrapSendStatus(call.call.sendStatus, span)
+    call.call.sendStatus = wrapSendStatus(call.call.sendStatus)
   }
 
   call.emit = function (eventName, ...args) {

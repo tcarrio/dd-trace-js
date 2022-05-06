@@ -10,6 +10,7 @@ class GrpcPlugin extends Plugin {
   }
 
   constructor (...args) {
+    super(...args)
     this.client = new ClientPlugin(...args)
     this.server = new ServerPlugin(...args)
   }

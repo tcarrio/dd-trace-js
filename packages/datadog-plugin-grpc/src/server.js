@@ -15,6 +15,7 @@ const CANCELLED = 1
 
 class GrpcServerPlugin extends Plugin {
   constructor (...args) {
+    super(...args)
     this.addSub('apm:grpc:server:start', ({ metadata, type, handler }) => {
       const tracer = this.tracer
       const config = this.config
@@ -32,7 +33,7 @@ class GrpcServerPlugin extends Plugin {
 
       analyticsSampler.sample(span, config.measured, true)
       addMethodTags(span, handler, type)
-      addMetadataTags(span, metadata, filter, 'request')
+      addMetadataTags(span, metadata, this.filter, 'request')
 
       this.enter(span, storage.getStore())
     })
@@ -76,12 +77,11 @@ class GrpcServerPlugin extends Plugin {
         span.setTag('grpc.status.code', OK)
       }
 
-      if (trailer && filter) {
+      if (trailer && this.filter) {
         addMetadataTags(span, trailer, this.filter, 'response')
       }
 
       span.finish()
-
     })
   }
 

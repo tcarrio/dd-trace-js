@@ -14,7 +14,7 @@ class GrpcClientPlugin extends Plugin {
     super(...args)
 
     this.addSub('apm:grpc:client:start', ({ path, methodKind, metadata }) => {
-      const childOf = tracer.scope().active()
+      const childOf = this.tracer.scope().active()
       const tags = {
         [Tags.SPAN_KIND]: 'client',
         'span.type': 'http',
