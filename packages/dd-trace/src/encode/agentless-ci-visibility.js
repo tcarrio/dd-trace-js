@@ -8,7 +8,7 @@ const ENCODING_VERSION = 1
 
 function formatSpan (span) {
   return {
-    type: span.type === 'test' ? 'test' : 'span',
+    type: !span.type ? 'span' : span.type,
     version: ENCODING_VERSION,
     content: normalizeSpan(truncateSpan(span))
   }

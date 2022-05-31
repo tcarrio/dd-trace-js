@@ -10,6 +10,12 @@ const hookErrorCh = channel('ci:mocha:hook:error')
 const parameterizedTestCh = channel('ci:mocha:test:parameterize')
 const testRunFinishCh = channel('ci:mocha:run:finish')
 
+const testRunStartCh = channel('ci:mocha:run:start')
+const testSuiteStartCh = channel('ci:mocha:suite:start')
+const testSuiteEndCh = channel('ci:mocha:suite:end')
+
+const id = require('../../dd-trace/src/id')
+
 // TODO: remove when root hooks and fixtures are implemented
 const patched = new WeakSet()
 
@@ -35,6 +41,27 @@ function mochaHook (Runner) {
   if (patched.has(Runner)) return Runner
 
   patched.add(Runner)
+
+  shimmer.wrap(Runner.prototype, 'run', run => function () {
+    this.once('start', function () {
+      const testSessionId = id().toString(10)
+      const testSessionTraceId = id().toString(10)
+      testRunStartCh.publish({ testSessionId, testSessionTraceId })
+      this._dd = {}
+      this._dd.testSessionId = testSessionId
+      this._dd.testSessionTraceId = testSessionTraceId
+    })
+
+    this.once('suite', function () {
+      const testSuiteId = id().toString(10)
+      testSuiteStartCh.publish(testSuiteId)
+      this._dd.testSuiteId = testSuiteId
+    })
+    this.once('suite end', function () {
+      testSuiteEndCh.publish(undefined)
+    })
+    return run.apply(this, arguments)
+  })
 
   shimmer.wrap(Runner.prototype, 'runTest', runTest => function () {
     if (!testStartCh.hasSubscribers || isRetry(this.test)) {

@@ -16,8 +16,10 @@ const {
   getTestParametersString,
   getCodeOwnersFileEntries,
   getCodeOwnersForFilename,
-  getTestCommonTags
+  getTestCommonTags,
+  getTestSessionCommonTags
 } = require('../../dd-trace/src/plugins/util/test')
+const id = require('../../dd-trace/src/id')
 
 const skippedTests = new WeakSet()
 
@@ -48,6 +50,37 @@ class MochaPlugin extends Plugin {
     this.testEnvironmentMetadata = getTestEnvironmentMetadata('mocha', this.config)
     this.sourceRoot = process.cwd()
     this.codeOwnersEntries = getCodeOwnersFileEntries(this.sourceRoot)
+
+    this.addSub('ci:mocha:run:start', ({ testSessionId, testSessionTraceId }) => {
+      this.runStartTimestamp = new Date().getTime()
+      this.testSessionId = testSessionId
+      this.testSessionTraceId = testSessionTraceId
+    })
+
+    this.addSub('ci:mocha:suite:start', (testSuiteId) => {
+      this.suiteStartTimestamp = new Date().getTime()
+      this.testSuiteId = testSuiteId
+    })
+
+    this.addSub('ci:mocha:suite:end', () => {
+      this.tracer._exporter._writer._encoder.encode([{
+        type: 'test_suite_end',
+        version: 1,
+        content: {
+          type: 'test_suite_end',
+          test_session_id: this.testSessionId,
+          test_suite_id: this.testSuiteId,
+          start: this.suiteStartTimestamp,
+          duration: new Date().getTime() - this.suiteStartTimestamp,
+          meta: {
+            test_session: {
+              command: 'yarn test'
+            },
+            ...this.testEnvironmentMetadata
+          }
+        }
+      }])
+    })
 
     this.addSub('ci:mocha:test:start', (test) => {
       const store = storage.getStore()
@@ -118,6 +151,22 @@ class MochaPlugin extends Plugin {
     })
 
     this.addSub('ci:mocha:run:finish', () => {
+      this.tracer._exporter._writer._encoder.encode([{
+        type: 'test_session_end',
+        version: 1,
+        content: {
+          type: 'test_session_end',
+          trace_id: this.testSessionTraceId,
+          span_id: this.testSessionId,
+          parent_id: id('0'),
+          start: this.suiteStartTimestamp,
+          duration: new Date().getTime() - this.suiteStartTimestamp,
+          meta: {
+            ...this.testEnvironmentMetadata,
+            ...getTestSessionCommonTags('yarn test', this.tracer._version)
+          }
+        }
+      }])
       this.tracer._exporter._writer.flush()
     })
   }

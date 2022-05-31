@@ -68,7 +68,8 @@ module.exports = {
   getTestSuitePath,
   getCodeOwnersFileEntries,
   getCodeOwnersForFilename,
-  getTestCommonTags
+  getTestCommonTags,
+  getTestSessionCommonTags
 }
 
 function getTestEnvironmentMetadata (testFramework, config) {
@@ -141,6 +142,15 @@ function getTestParentSpan (tracer) {
     'x-datadog-trace-id': id().toString(10),
     'x-datadog-parent-id': '0000000000000000'
   })
+}
+
+function getTestSessionCommonTags (command, version) {
+  return {
+    [SPAN_TYPE]: 'test_session_end',
+    [RESOURCE_NAME]: `test_session.${command}`,
+    [TEST_FRAMEWORK_VERSION]: version,
+    [LIBRARY_VERSION]: ddTraceVersion
+  }
 }
 
 function getTestCommonTags (name, suite, version) {
