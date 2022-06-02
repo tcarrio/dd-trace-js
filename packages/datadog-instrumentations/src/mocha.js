@@ -14,8 +14,6 @@ const testRunStartCh = channel('ci:mocha:run:start')
 const testSuiteStartCh = channel('ci:mocha:suite:start')
 const testSuiteEndCh = channel('ci:mocha:suite:end')
 
-const id = require('../../dd-trace/src/id')
-
 // TODO: remove when root hooks and fixtures are implemented
 const patched = new WeakSet()
 
@@ -43,21 +41,23 @@ function mochaHook (Runner) {
   patched.add(Runner)
 
   shimmer.wrap(Runner.prototype, 'run', run => function () {
+    this.once('end', AsyncResource.bind(() => {
+      testRunFinishCh.publish()
+    }))
+
     this.once('start', function () {
-      const testSessionId = id().toString(10)
-      const testSessionTraceId = id().toString(10)
-      testRunStartCh.publish({ testSessionId, testSessionTraceId })
-      this._dd = {}
-      this._dd.testSessionId = testSessionId
-      this._dd.testSessionTraceId = testSessionTraceId
+      testRunStartCh.publish('yarn test')
     })
 
-    this.once('suite', function () {
-      const testSuiteId = id().toString(10)
-      testSuiteStartCh.publish(testSuiteId)
-      this._dd.testSuiteId = testSuiteId
+    this.on('suite', function (suite) {
+      if (suite.root) {
+        return
+      }
+      testSuiteStartCh.publish({ name: suite.title })
     })
-    this.once('suite end', function () {
+
+    this.on('suite end', function (suite) {
+      // get suite status
       testSuiteEndCh.publish(undefined)
     })
     return run.apply(this, arguments)
@@ -107,9 +107,6 @@ function mochaHook (Runner) {
     if (!suiteFinishCh.hasSubscribers) {
       return runTests.apply(this, arguments)
     }
-    this.once('end', AsyncResource.bind(() => {
-      testRunFinishCh.publish()
-    }))
     runTests.apply(this, arguments)
     const suite = arguments[0]
     // We call `getAllTestsInSuite` with the root suite so every skipped test

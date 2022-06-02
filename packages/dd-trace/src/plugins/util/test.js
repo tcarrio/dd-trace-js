@@ -69,7 +69,8 @@ module.exports = {
   getCodeOwnersFileEntries,
   getCodeOwnersForFilename,
   getTestCommonTags,
-  getTestSessionCommonTags
+  getTestSessionCommonTags,
+  getTestSuiteCommonTags
 }
 
 function getTestEnvironmentMetadata (testFramework, config) {
@@ -144,9 +145,21 @@ function getTestParentSpan (tracer) {
   })
 }
 
+function getTestSuiteCommonTags (version, name) {
+  return {
+    [SPAN_TYPE]: 'test', // to be changed
+    [TEST_TYPE]: 'test', // to be changed
+    [RESOURCE_NAME]: `test_suite.${name}`,
+    [TEST_FRAMEWORK_VERSION]: version,
+    [LIBRARY_VERSION]: ddTraceVersion,
+    [TEST_SUITE]: name
+  }
+}
+
 function getTestSessionCommonTags (command, version) {
   return {
-    [SPAN_TYPE]: 'test_session_end',
+    [SPAN_TYPE]: 'test', // to be changed
+    [TEST_TYPE]: 'test', // to be changed
     [RESOURCE_NAME]: `test_session.${command}`,
     [TEST_FRAMEWORK_VERSION]: version,
     [LIBRARY_VERSION]: ddTraceVersion

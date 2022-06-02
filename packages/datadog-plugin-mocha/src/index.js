@@ -2,7 +2,6 @@
 
 const Plugin = require('../../dd-trace/src/plugins/plugin')
 const { storage } = require('../../datadog-core')
-
 const {
   CI_APP_ORIGIN,
   TEST_CODE_OWNERS,
@@ -17,9 +16,9 @@ const {
   getCodeOwnersFileEntries,
   getCodeOwnersForFilename,
   getTestCommonTags,
-  getTestSessionCommonTags
+  getTestSessionCommonTags,
+  getTestSuiteCommonTags
 } = require('../../dd-trace/src/plugins/util/test')
-const id = require('../../dd-trace/src/id')
 
 const skippedTests = new WeakSet()
 
@@ -31,6 +30,17 @@ function getTestSpanMetadata (tracer, test, sourceRoot) {
   const testSuite = getTestSuitePath(testSuiteAbsolutePath, sourceRoot)
 
   const commonTags = getTestCommonTags(fullTestName, testSuite, tracer._version)
+
+  return {
+    childOf,
+    ...commonTags
+  }
+}
+
+function getTestSessionSpanMetadata (tracer, command) {
+  const childOf = getTestParentSpan(tracer)
+
+  const commonTags = getTestSessionCommonTags(command, tracer._version)
 
   return {
     childOf,
@@ -51,35 +61,31 @@ class MochaPlugin extends Plugin {
     this.sourceRoot = process.cwd()
     this.codeOwnersEntries = getCodeOwnersFileEntries(this.sourceRoot)
 
-    this.addSub('ci:mocha:run:start', ({ testSessionId, testSessionTraceId }) => {
-      this.runStartTimestamp = new Date().getTime()
-      this.testSessionId = testSessionId
-      this.testSessionTraceId = testSessionTraceId
+    this.addSub('ci:mocha:run:start', (command) => {
+      const { childOf, ...testSessionSpanMetadata } = getTestSessionSpanMetadata(this.tracer, command)
+      this.command = command
+      this.testSessionSpan = this.tracer.startSpan('mocha.test_session', {
+        childOf,
+        tags: {
+          ...this.testEnvironmentMetadata,
+          ...testSessionSpanMetadata
+        }
+      })
     })
 
-    this.addSub('ci:mocha:suite:start', (testSuiteId) => {
-      this.suiteStartTimestamp = new Date().getTime()
-      this.testSuiteId = testSuiteId
+    this.addSub('ci:mocha:suite:start', ({ name }) => {
+      const testSuiteMetadata = getTestSuiteCommonTags(this.tracer._version, name)
+      this.testSuiteSpan = this.tracer.startSpan('mocha.test_suite', {
+        childOf: this.testSessionSpan,
+        tags: {
+          ...this.testEnvironmentMetadata,
+          ...testSuiteMetadata
+        }
+      })
     })
 
     this.addSub('ci:mocha:suite:end', () => {
-      this.tracer._exporter._writer._encoder.encode([{
-        type: 'test_suite_end',
-        version: 1,
-        content: {
-          type: 'test_suite_end',
-          test_session_id: this.testSessionId,
-          test_suite_id: this.testSuiteId,
-          start: this.suiteStartTimestamp,
-          duration: new Date().getTime() - this.suiteStartTimestamp,
-          meta: {
-            test_session: {
-              command: 'yarn test'
-            },
-            ...this.testEnvironmentMetadata
-          }
-        }
-      }])
+      this.testSuiteSpan.finish()
     })
 
     this.addSub('ci:mocha:test:start', (test) => {
@@ -151,22 +157,7 @@ class MochaPlugin extends Plugin {
     })
 
     this.addSub('ci:mocha:run:finish', () => {
-      this.tracer._exporter._writer._encoder.encode([{
-        type: 'test_session_end',
-        version: 1,
-        content: {
-          type: 'test_session_end',
-          trace_id: this.testSessionTraceId,
-          span_id: this.testSessionId,
-          parent_id: id('0'),
-          start: this.suiteStartTimestamp,
-          duration: new Date().getTime() - this.suiteStartTimestamp,
-          meta: {
-            ...this.testEnvironmentMetadata,
-            ...getTestSessionCommonTags('yarn test', this.tracer._version)
-          }
-        }
-      }])
+      this.testSessionSpan.finish()
       this.tracer._exporter._writer.flush()
     })
   }
@@ -184,9 +175,13 @@ class MochaPlugin extends Plugin {
       testSpanMetadata[TEST_CODE_OWNERS] = codeOwners
     }
 
+    // temporary to have the visualization
     const testSpan = this.tracer
       .startSpan('mocha.test', {
-        childOf,
+        childOf: this.tracer.extract('text_map', {
+          'x-datadog-trace-id': this.testSessionSpan.context()._traceId.toString(10),
+          'x-datadog-parent-id': this.testSuiteSpan.context()._spanId.toString(10)
+        }),
         tags: {
           ...this.testEnvironmentMetadata,
           ...testSpanMetadata
