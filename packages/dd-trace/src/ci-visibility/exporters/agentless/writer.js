@@ -16,6 +16,7 @@ class Writer extends BaseWriter {
   _sendPayload (data, _, done) {
     makeRequest(data, this._url, (err, res) => {
       if (err) {
+        console.log(err)
         log.error(err)
         done()
         return
@@ -28,10 +29,11 @@ class Writer extends BaseWriter {
 
 function makeRequest (data, url, cb) {
   const options = {
-    path: '/api/v2/citestcycle',
+    path: '/evp_proxy/v1' + '/api/v2/citestcycle',
     method: 'POST',
     headers: {
       'Content-Type': 'application/msgpack',
+      'X-Datadog-EVP-Subdomain': 'citestcycle-intake',
       'dd-api-key': process.env.DATADOG_API_KEY || process.env.DD_API_KEY
     },
     timeout: 15000
@@ -43,6 +45,7 @@ function makeRequest (data, url, cb) {
 
   log.debug(() => `Request to the intake: ${JSON.stringify(options)}`)
 
+  console.log("SENDERINO", options)
   request(data, options, false, (err, res) => {
     cb(err, res)
   })
