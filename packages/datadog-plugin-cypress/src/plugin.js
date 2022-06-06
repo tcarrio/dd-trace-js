@@ -7,7 +7,10 @@ const {
   getTestParentSpan,
   getCodeOwnersFileEntries,
   getCodeOwnersForFilename,
-  getTestCommonTags
+  getTestCommonTags,
+  getTestSuiteCommonTags,
+  getTestSessionCommonTags,
+  finishAllTraceSpans
 } = require('../../dd-trace/src/plugins/util/test')
 
 const { ORIGIN_KEY } = require('../../dd-trace/src/constants')
@@ -30,6 +33,17 @@ function getTestSpanMetadata (tracer, testName, testSuite, cypressConfig) {
   }
 }
 
+function getTestSessionSpanMetadata (tracer, command) {
+  const childOf = getTestParentSpan(tracer)
+
+  const commonTags = getTestSessionCommonTags(command, tracer._version)
+
+  return {
+    childOf,
+    ...commonTags
+  }
+}
+
 module.exports = (on, config) => {
   const tracer = require('../../dd-trace')
   const testEnvironmentMetadata = getTestEnvironmentMetadata('cypress')
@@ -37,12 +51,51 @@ module.exports = (on, config) => {
   const codeOwnersEntries = getCodeOwnersFileEntries()
 
   let activeSpan = null
+  let sessionSpan = null
+  let activeSuiteSpan = null
+
+  on('before:run', () => { // get test command here
+    const {
+      childOf,
+      resource,
+      ...testSpanMetadata
+    } = getTestSessionSpanMetadata(tracer, 'yarn test') // dumb command
+
+    sessionSpan = tracer.startSpan('cypress.test_session', {
+      childOf,
+      tags: {
+        [ORIGIN_KEY]: CI_APP_ORIGIN,
+        ...testSpanMetadata,
+        ...testEnvironmentMetadata
+      }
+    })
+  })
+
   on('after:run', () => {
+    sessionSpan.setTag(TEST_STATUS, 'pass') // get actual status
+    sessionSpan.finish()
+    finishAllTraceSpans(sessionSpan)
     return new Promise(resolve => {
       tracer._tracer._exporter._writer.flush(() => resolve(null))
     })
   })
   on('task', {
+    'dd:before': (testSuite) => {
+      const testSuiteMetadata = getTestSuiteCommonTags(tracer._version, testSuite)
+      activeSuiteSpan = tracer.startSpan('cypress.test_suite', {
+        childOf: sessionSpan,
+        tags: {
+          ...testEnvironmentMetadata,
+          ...testSuiteMetadata
+        }
+      })
+      return null
+    },
+    'dd:after': (status) => {
+      activeSuiteSpan.setTag(TEST_STATUS, status)
+      activeSuiteSpan.finish()
+      return null
+    },
     'dd:beforeEach': (test) => {
       const { testName, testSuite } = test
 
@@ -60,7 +113,10 @@ module.exports = (on, config) => {
 
       if (!activeSpan) {
         activeSpan = tracer.startSpan('cypress.test', {
-          childOf,
+          childOf: tracer.extract('text_map', {
+            'x-datadog-trace-id': sessionSpan.context()._traceId.toString(10),
+            'x-datadog-parent-id': activeSuiteSpan.context()._spanId.toString(10)
+          }),
           tags: {
             [ORIGIN_KEY]: CI_APP_ORIGIN,
             ...testSpanMetadata,

@@ -1,4 +1,8 @@
 /* eslint-disable */
+before(() => {
+  cy.task('dd:before', Cypress.mocha.getRootSuite().file)
+})
+
 beforeEach(() => {
   cy.task('dd:beforeEach', {
     testName: Cypress.mocha.getRunner().suite.ctx.currentTest.fullTitle(),
@@ -11,6 +15,7 @@ beforeEach(() => {
 after(() => {
   cy.window().then(win => {
     win.dispatchEvent(new Event('beforeunload'))
+    cy.task('dd:after', 'pass') // get actual status
   })
 })
 
