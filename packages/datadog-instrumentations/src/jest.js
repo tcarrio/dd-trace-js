@@ -7,7 +7,14 @@ const testStartCh = channel('ci:jest:test:start')
 const testSkippedCh = channel('ci:jest:test:skip')
 const testRunFinishCh = channel('ci:jest:test:finish')
 const testErrCh = channel('ci:jest:test:err')
+
+const testSuiteStartCh = channel('ci:jest:test-suite:start')
 const testSuiteFinish = channel('ci:jest:test-suite:finish')
+
+const testSessionStartCh = channel('ci:jest:session:start')
+const testSessionFinishCh = channel('ci:jest:session:finish')
+
+const testSessionConfigurationCh = channel('ci:jest:session:configuration')
 
 const {
   getTestSuitePath,
@@ -52,11 +59,25 @@ function getWrappedEnvironment (BaseEnvironment) {
       this.testSuite = getTestSuitePath(context.testPath, rootDir)
       this.nameToParams = {}
       this.global._ddtrace = global._ddtrace
+
+      if (config.testEnvironmentOptions._ddTestSessionSpanId) {
+        this._ddTestSessionSpanId = config.testEnvironmentOptions._ddTestSessionSpanId
+        this._ddTestSessionTraceId = config.testEnvironmentOptions._ddTestSessionTraceId
+      }
     }
     async teardown () {
       super.teardown().finally(() => {
         testSuiteFinish.publish()
       })
+    }
+
+    async setup () {
+      testSuiteStartCh.publish({
+        testSuite: this.testSuite,
+        testSessionSpanId: this._ddTestSessionSpanId,
+        testSessionTraceId: this._ddTestSessionTraceId
+      })
+      return super.setup()
     }
 
     async handleTestEvent (event, state) {
@@ -140,6 +161,36 @@ addHook({
   name: 'jest-environment-jsdom',
   versions: ['>=24.8.0']
 }, getTestEnvironment)
+
+addHook({
+  name: 'jest-cli',
+  file: 'build/cli/index.js',
+  versions: ['>=24.8.0']
+}, cli => {
+  shimmer.wrap(cli, 'run', run => async function () {
+    testSessionStartCh.publish('yarn test') // get actual command
+    await run.apply(this, arguments)
+    testSessionFinishCh.publish('pass') // get actual status
+  })
+
+  return cli
+})
+
+addHook({
+  name: 'jest-config',
+  versions: ['>=24.8.0']
+}, (jestConfig) => {
+  shimmer.wrap(jestConfig, 'readConfigs', readConfigs => async function () {
+    return readConfigs.apply(this, arguments).then((results) => {
+      const { configs } = results
+      // we pass the config option to the subscriber for it to modify this
+      // object with the necessary trace and span ids
+      testSessionConfigurationCh.publish(configs[0].testEnvironmentOptions)
+      return results
+    })
+  })
+  return jestConfig
+})
 
 addHook({
   name: 'jest-jasmine2',

@@ -157,6 +157,7 @@ class MochaPlugin extends Plugin {
     })
 
     this.addSub('ci:mocha:run:finish', () => {
+      this.testSessionSpan.setTag(TEST_STATUS, 'pass')
       this.testSessionSpan.finish()
       this.tracer._exporter._writer.flush()
     })
