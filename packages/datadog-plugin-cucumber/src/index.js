@@ -14,9 +14,22 @@ const {
   getTestSuitePath,
   getCodeOwnersFileEntries,
   getCodeOwnersForFilename,
-  getTestCommonTags
+  getTestCommonTags,
+  getTestParentSpan,
+  getTestSessionCommonTags
 } = require('../../dd-trace/src/plugins/util/test')
 const { RESOURCE_NAME } = require('../../../ext/tags')
+
+function getTestSessionSpanMetadata (tracer, command) {
+  const childOf = getTestParentSpan(tracer)
+
+  const commonTags = getTestSessionCommonTags(command, tracer._version)
+
+  return {
+    childOf,
+    ...commonTags
+  }
+}
 
 class CucumberPlugin extends Plugin {
   static get name () {
@@ -32,7 +45,6 @@ class CucumberPlugin extends Plugin {
 
     this.addSub('ci:cucumber:run:start', ({ pickleName, pickleUri }) => {
       const store = storage.getStore()
-      const childOf = store ? store.span : store
       const testSuite = getTestSuitePath(pickleUri, sourceRoot)
 
       const commonTags = getTestCommonTags(pickleName, testSuite, this.tracer._version)
@@ -43,7 +55,7 @@ class CucumberPlugin extends Plugin {
       }
 
       const span = this.tracer.startSpan('cucumber.test', {
-        childOf,
+        childOf: this.testSessionSpan,
         tags: {
           ...commonTags,
           ...testEnvironmentMetadata
@@ -52,6 +64,29 @@ class CucumberPlugin extends Plugin {
 
       span.context()._trace.origin = CI_APP_ORIGIN
       this.enter(span, store)
+    })
+
+    this.addSub('ci:cucumber:session:start', () => {
+      const {
+        childOf,
+        resource,
+        ...testSessionMetadata
+      } = getTestSessionSpanMetadata(this.tracer, 'yarn test') // dumb command
+
+      this.testSessionSpan = this.tracer.startSpan('cucumber.test_session', {
+        childOf,
+        tags: {
+          ...testSessionMetadata,
+          ...testEnvironmentMetadata
+        }
+      })
+    })
+
+    this.addSub('ci:cucumber:session:finish', () => {
+      this.testSessionSpan.setTag(TEST_STATUS, 'pass') // get actual status
+      this.testSessionSpan.finish()
+      finishAllTraceSpans(this.testSessionSpan)
+      this.tracer._exporter._writer.flush()
     })
 
     this.addSub('ci:cucumber:run-step:start', ({ resource }) => {
@@ -82,9 +117,6 @@ class CucumberPlugin extends Plugin {
       }
 
       span.finish()
-      if (!isStep) {
-        finishAllTraceSpans(span)
-      }
     })
 
     this.addSub('ci:cucumber:error', (err) => {

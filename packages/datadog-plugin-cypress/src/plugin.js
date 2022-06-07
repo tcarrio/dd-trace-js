@@ -58,14 +58,14 @@ module.exports = (on, config) => {
     const {
       childOf,
       resource,
-      ...testSpanMetadata
+      ...testSessionMetadata
     } = getTestSessionSpanMetadata(tracer, 'yarn test') // dumb command
 
     sessionSpan = tracer.startSpan('cypress.test_session', {
       childOf,
       tags: {
         [ORIGIN_KEY]: CI_APP_ORIGIN,
-        ...testSpanMetadata,
+        ...testSessionMetadata,
         ...testEnvironmentMetadata
       }
     })
