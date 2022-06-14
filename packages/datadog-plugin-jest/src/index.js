@@ -80,14 +80,15 @@ class JestPlugin extends Plugin {
     })
 
     // Test suites are run in different processes from the jest's main one.
-    // This subscriber changes the configuration object from jest to inject the trace id
+    // This subscriber changes the configuration objects from jest to inject the trace id
     // of the test session to the processes that run the test suites.
-    this.addSub('ci:jest:session:configuration', config => {
-      config._ddTestSessionId = this.testSessionSpan.context()._traceId.toString(10)
+    this.addSub('ci:jest:session:configuration', configs => {
+      configs.forEach(config => {
+        config._ddTestSessionId = this.testSessionSpan.context()._traceId.toString(10)
+      })
     })
 
     this.addSub('ci:jest:test-suite:start', ({ testSuite, testSessionId }) => {
-      // this will need special format
       const testSessionSpanContext = this.tracer.extract('text_map', {
         'x-datadog-trace-id': testSessionId,
         'x-datadog-span-id': testSessionId,
@@ -119,8 +120,11 @@ class JestPlugin extends Plugin {
       finishAllTraceSpans(span)
     })
 
-    this.addSub('ci:jest:test-suite:finish', (status) => {
+    this.addSub('ci:jest:test-suite:finish', ({ status, errorMessage }) => {
       this.testSuiteSpan.setTag(TEST_STATUS, status)
+      if (errorMessage) {
+        this.testSuiteSpan.setTag('error', new Error(errorMessage))
+      }
       this.testSuiteSpan.finish()
       this.tracer._exporter._writer.flush()
     })

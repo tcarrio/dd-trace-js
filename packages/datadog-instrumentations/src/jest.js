@@ -64,11 +64,6 @@ function getWrappedEnvironment (BaseEnvironment) {
         this._ddTestSessionId = config.testEnvironmentOptions._ddTestSessionId
       }
     }
-    async teardown () {
-      super.teardown().finally(() => {
-        testSuiteFinish.publish('pass') // get actual status
-      })
-    }
 
     async setup () {
       testSuiteStartCh.publish({
@@ -152,19 +147,39 @@ function getTestEnvironment (pkg) {
 }
 
 addHook({
-  name: 'jest-cli',
+  name: '@jest/core',
   file: 'build/cli/index.js',
   versions: ['>=24.8.0']
 }, cli => {
-  shimmer.wrap(cli, 'run', run => async function () {
-    debugger
-    testSessionStartCh.publish('yarn test') // get actual command
-    const res = await run.apply(this, arguments)
-    debugger
-    testSessionFinishCh.publish('pass') // get actual status
+  shimmer.wrap(cli, 'runCLI', runCLI => async function () {
+    // remove 'node' and 'jest'
+    const processArgv = process.argv.slice(2).join(' ')
+    testSessionStartCh.publish(`jest ${processArgv}`)
+    const res = await runCLI.apply(this, arguments)
+    const { results: { success } } = res
+    testSessionFinishCh.publish(success ? 'pass' : 'fail')
   })
 
   return cli
+})
+
+addHook({
+  name: 'jest-circus',
+  file: 'build/legacy-code-todo-rewrite/jestAdapter.js',
+  versions: ['>=24.8.0']
+}, jestAdapter => {
+  return shimmer.wrap(jestAdapter, async function () {
+    const suiteResults = await jestAdapter.apply(this, arguments)
+    const { numFailingTests, skipped, failureMessage: errorMessage } = suiteResults
+    let status = 'pass'
+    if (skipped) {
+      status = 'skipped'
+    } else if (numFailingTests !== 0) {
+      status = 'fail'
+    }
+    testSuiteFinish.publish({ status, errorMessage })
+    return suiteResults
+  })
 })
 
 addHook({
@@ -174,9 +189,9 @@ addHook({
   shimmer.wrap(jestConfig, 'readConfigs', readConfigs => async function () {
     return readConfigs.apply(this, arguments).then((results) => {
       const { configs } = results
-      // We pass the config option to the subscriber for it to modify this
-      // object with the necessary trace id
-      testSessionConfigurationCh.publish(configs[0].testEnvironmentOptions)
+      // We pass the testEnvironmentOptions option for every config (one per jest's project)
+      // These will be assigned to the test session id in the subscriber
+      testSessionConfigurationCh.publish(configs.map(config => config.testEnvironmentOptions))
       return results
     })
   })
@@ -193,6 +208,7 @@ addHook({
   versions: ['>=24.8.0']
 }, getTestEnvironment)
 
+// TODO: support for jest-jasmine
 addHook({
   name: 'jest-jasmine2',
   versions: ['>=24.8.0'],
