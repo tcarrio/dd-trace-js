@@ -177,7 +177,7 @@ addHook({
     } else if (numFailingTests !== 0) {
       status = 'fail'
     }
-    testSuiteFinish.publish({ status, errorMessage })
+    testSuiteFinish.publish({ status, errorMessage })
     return suiteResults
   })
 })

@@ -9,18 +9,18 @@ const {
   getTestEnvironmentMetadata,
   getTestParentSpan,
   getTestCommonTags,
+  getTestSessionCommonTags,
+  getTestSuiteCommonTags,
   TEST_PARAMETERS,
   getCodeOwnersFileEntries,
   getCodeOwnersForFilename,
   TEST_CODE_OWNERS,
-  getTestSessionCommonTags,
-  getTestSuiteCommonTags,
   TEST_SESSION_ID,
   TEST_SUITE_ID,
   TEST_COMMAND
 } = require('../../dd-trace/src/plugins/util/test')
 
-function getTestSpanMetadata (tracer, test, testSuiteId, command) {
+function getTestSpanMetadata (tracer, test) {
   const childOf = getTestParentSpan(tracer)
 
   const { suite, name, runner, testParameters } = test
@@ -31,21 +31,7 @@ function getTestSpanMetadata (tracer, test, testSuiteId, command) {
     childOf,
     ...commonTags,
     [JEST_TEST_RUNNER]: runner,
-    [TEST_PARAMETERS]: testParameters,
-    [TEST_SESSION_ID]: test.testSessionId,
-    [TEST_SUITE_ID]: testSuiteId,
-    [TEST_COMMAND]: command
-  }
-}
-
-function getTestSessionSpanMetadata (tracer, command) {
-  const childOf = getTestParentSpan(tracer)
-
-  const commonTags = getTestSessionCommonTags(command, tracer._version)
-
-  return {
-    childOf,
-    ...commonTags
+    [TEST_PARAMETERS]: testParameters
   }
 }
 
@@ -61,7 +47,9 @@ class JestPlugin extends Plugin {
     this.codeOwnersEntries = getCodeOwnersFileEntries()
 
     this.addSub('ci:jest:session:start', (command) => {
-      const { childOf, ...testSessionSpanMetadata } = getTestSessionSpanMetadata(this.tracer, command)
+      const childOf = getTestParentSpan(this.tracer)
+      const testSessionSpanMetadata = getTestSessionCommonTags(command, this.tracer._version)
+
       this.command = command
       this.testSessionSpan = this.tracer.startSpan('jest.test_session', {
         childOf,
@@ -95,6 +83,7 @@ class JestPlugin extends Plugin {
         'x-datadog-parent-id': '0000000000000000'
       })
 
+      this.testSessionId = testSessionId
       const testSuiteMetadata = getTestSuiteCommonTags(this.tracer._version, testSuite)
 
       this.testSuiteSpan = this.tracer.startSpan('jest.test_suite', {
@@ -150,7 +139,7 @@ class JestPlugin extends Plugin {
     const {
       childOf,
       ...testSpanMetadata
-    } = getTestSpanMetadata(this.tracer, test, testSuiteId, 'yarn test') // get actual command. How?
+    } = getTestSpanMetadata(this.tracer, test)
 
     const codeOwners = getCodeOwnersForFilename(test.suite, this.codeOwnersEntries)
 
@@ -163,7 +152,10 @@ class JestPlugin extends Plugin {
         childOf,
         tags: {
           ...this.testEnvironmentMetadata,
-          ...testSpanMetadata
+          ...testSpanMetadata,
+          [TEST_SUITE_ID]: testSuiteId,
+          [TEST_SESSION_ID]: this.testSessionId,
+          [TEST_COMMAND]: this.command
         }
       })
 
