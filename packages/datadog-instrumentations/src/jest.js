@@ -155,9 +155,10 @@ addHook({
     // remove 'node' and 'jest'
     const processArgv = process.argv.slice(2).join(' ')
     testSessionStartCh.publish(`jest ${processArgv}`)
-    const res = await runCLI.apply(this, arguments)
-    const { results: { success } } = res
+    const result = await runCLI.apply(this, arguments)
+    const { results: { success } } = result
     testSessionFinishCh.publish(success ? 'pass' : 'fail')
+    return result
   })
 
   return cli

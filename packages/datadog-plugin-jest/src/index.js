@@ -19,6 +19,7 @@ const {
   TEST_SUITE_ID,
   TEST_COMMAND
 } = require('../../dd-trace/src/plugins/util/test')
+const id = require('../../dd-trace/src/id')
 
 function getTestSpanMetadata (tracer, test) {
   const childOf = getTestParentSpan(tracer)
@@ -72,14 +73,14 @@ class JestPlugin extends Plugin {
     // of the test session to the processes that run the test suites.
     this.addSub('ci:jest:session:configuration', configs => {
       configs.forEach(config => {
-        config._ddTestSessionId = this.testSessionSpan.context()._traceId.toString(10)
+        config._ddTestSessionId = this.testSessionSpan.context()._traceId.toString('hex')
       })
     })
 
     this.addSub('ci:jest:test-suite:start', ({ testSuite, testSessionId }) => {
       const testSessionSpanContext = this.tracer.extract('text_map', {
-        'x-datadog-trace-id': testSessionId,
-        'x-datadog-span-id': testSessionId,
+        'x-datadog-trace-id': id(testSessionId).toString(10),
+        'x-datadog-span-id': id(testSessionId).toString(10),
         'x-datadog-parent-id': '0000000000000000'
       })
 
@@ -134,7 +135,7 @@ class JestPlugin extends Plugin {
   }
 
   startTestSpan (test) {
-    const testSuiteId = this.testSuiteSpan.context()._traceId.toString(10)
+    const testSuiteId = this.testSuiteSpan.context()._spanId.toString('hex')
 
     const {
       childOf,
