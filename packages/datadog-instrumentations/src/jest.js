@@ -152,7 +152,6 @@ addHook({
   versions: ['>=24.8.0']
 }, cli => {
   shimmer.wrap(cli, 'runCLI', runCLI => async function () {
-    // remove 'node' and 'jest'
     const processArgv = process.argv.slice(2).join(' ')
     testSessionStartCh.publish(`jest ${processArgv}`)
     const result = await runCLI.apply(this, arguments)

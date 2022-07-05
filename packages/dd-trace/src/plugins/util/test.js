@@ -159,14 +159,15 @@ function getTestSessionCommonTags (command, version) {
     [TEST_TYPE]: 'test',
     [RESOURCE_NAME]: `test_session.${command}`,
     [TEST_FRAMEWORK_VERSION]: version,
-    [LIBRARY_VERSION]: ddTraceVersion
+    [LIBRARY_VERSION]: ddTraceVersion,
+    [TEST_COMMAND]: command
   }
 }
 
 function getTestSuiteCommonTags (version, name) {
   return {
-    [SPAN_TYPE]: 'test_suite_end', // to be changed
-    [TEST_TYPE]: 'test', // to be changed
+    [SPAN_TYPE]: 'test_suite_end',
+    [TEST_TYPE]: 'test',
     [RESOURCE_NAME]: `test_suite.${name}`,
     [TEST_FRAMEWORK_VERSION]: version,
     [LIBRARY_VERSION]: ddTraceVersion,
