@@ -8,8 +8,8 @@ const testSessionFinishCh = channel('ci:jest:session:finish')
 
 const testSessionConfigurationCh = channel('ci:jest:session:configuration')
 
-const testSuiteFinish = channel('ci:jest:test-suite:finish')
 const testSuiteStartCh = channel('ci:jest:test-suite:start')
+const testSuiteFinish = channel('ci:jest:test-suite:finish')
 
 const testStartCh = channel('ci:jest:test:start')
 const testSkippedCh = channel('ci:jest:test:skip')
@@ -60,15 +60,20 @@ function getWrappedEnvironment (BaseEnvironment) {
       this.nameToParams = {}
       this.global._ddtrace = global._ddtrace
 
-      if (config.testEnvironmentOptions._ddTestSessionId) {
+      if (config.projectConfig && config.projectConfig.testEnvironmentOptions) { // newer versions
+        this._ddTestSessionId = config.projectConfig.testEnvironmentOptions._ddTestSessionId
+        this._ddTestCommand = config.projectConfig.testEnvironmentOptions._ddTestCommand
+      } else if (config.testEnvironmentOptions) {
         this._ddTestSessionId = config.testEnvironmentOptions._ddTestSessionId
+        this._ddTestCommand = config.testEnvironmentOptions._ddTestCommand
       }
     }
 
     async setup () {
       testSuiteStartCh.publish({
         testSuite: this.testSuite,
-        testSessionId: this._ddTestSessionId
+        testSessionId: this._ddTestSessionId,
+        testCommand: this._ddTestCommand
       })
       return super.setup()
     }
@@ -151,7 +156,7 @@ addHook({
   file: 'build/cli/index.js',
   versions: ['>=24.8.0']
 }, cli => {
-  shimmer.wrap(cli, 'runCLI', runCLI => async function () {
+  const wrapped = shimmer.wrap(cli, 'runCLI', runCLI => async function () {
     const processArgv = process.argv.slice(2).join(' ')
     testSessionStartCh.publish(`jest ${processArgv}`)
     const result = await runCLI.apply(this, arguments)
@@ -159,6 +164,8 @@ addHook({
     testSessionFinishCh.publish(success ? 'pass' : 'fail')
     return result
   })
+
+  cli.runCLI = wrapped.runCLI
 
   return cli
 })
@@ -168,8 +175,9 @@ addHook({
   file: 'build/legacy-code-todo-rewrite/jestAdapter.js',
   versions: ['>=24.8.0']
 }, jestAdapter => {
-  return shimmer.wrap(jestAdapter, async function () {
-    const suiteResults = await jestAdapter.apply(this, arguments)
+  const adapter = jestAdapter.default ? jestAdapter.default : jestAdapter
+  const newAdapter = shimmer.wrap(adapter, async function () {
+    const suiteResults = await adapter.apply(this, arguments)
     const { numFailingTests, skipped, failureMessage: errorMessage } = suiteResults
     let status = 'pass'
     if (skipped) {
@@ -180,20 +188,33 @@ addHook({
     testSuiteFinish.publish({ status, errorMessage })
     return suiteResults
   })
+  if (jestAdapter.default) {
+    jestAdapter.default = newAdapter
+  } else {
+    jestAdapter = newAdapter
+  }
+
+  return jestAdapter
 })
 
 addHook({
   name: 'jest-config',
   versions: ['>=24.8.0']
 }, (jestConfig) => {
-  shimmer.wrap(jestConfig, 'readConfigs', readConfigs => async function () {
-    return readConfigs.apply(this, arguments).then((results) => {
+  // readConfigs changes signature for newer versions (it becomes "async"): do I need to take this into account?
+  shimmer.wrap(jestConfig, 'readConfigs', readConfigs => function () {
+    const results = readConfigs.apply(this, arguments)
+    if (results.then) {
+      results.then((res) => {
+        const { configs } = res
+        testSessionConfigurationCh.publish(configs.map(config => config.testEnvironmentOptions))
+        return res
+      })
+    } else {
       const { configs } = results
-      // We pass the testEnvironmentOptions option for every config (one per jest's project)
-      // These will be assigned to the test session id in the subscriber
       testSessionConfigurationCh.publish(configs.map(config => config.testEnvironmentOptions))
-      return results
-    })
+    }
+    return results
   })
   return jestConfig
 })

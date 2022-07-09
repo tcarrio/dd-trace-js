@@ -70,14 +70,15 @@ class JestPlugin extends Plugin {
 
     // Test suites are run in different processes from the jest's main one.
     // This subscriber changes the configuration objects from jest to inject the trace id
-    // of the test session to the processes that run the test suites.
+    // of the test session to the processes that run the test suites and the test command
     this.addSub('ci:jest:session:configuration', configs => {
       configs.forEach(config => {
         config._ddTestSessionId = this.testSessionSpan.context()._traceId.toString('hex')
+        config._ddTestCommand = this.command
       })
     })
 
-    this.addSub('ci:jest:test-suite:start', ({ testSuite, testSessionId }) => {
+    this.addSub('ci:jest:test-suite:start', ({ testSuite, testSessionId, testCommand }) => {
       const testSessionSpanContext = this.tracer.extract('text_map', {
         'x-datadog-trace-id': id(testSessionId).toString(10),
         'x-datadog-span-id': id(testSessionId).toString(10),
@@ -85,7 +86,7 @@ class JestPlugin extends Plugin {
       })
 
       this.testSessionId = testSessionId
-      const testSuiteMetadata = getTestSuiteCommonTags(this.tracer._version, testSuite)
+      const testSuiteMetadata = getTestSuiteCommonTags(testCommand, this.tracer._version, testSuite)
 
       this.testSuiteSpan = this.tracer.startSpan('jest.test_suite', {
         childOf: testSessionSpanContext,
@@ -94,6 +95,15 @@ class JestPlugin extends Plugin {
           ...testSuiteMetadata
         }
       })
+    })
+
+    this.addSub('ci:jest:test-suite:finish', ({ status, errorMessage }) => {
+      this.testSuiteSpan.setTag(TEST_STATUS, status)
+      if (errorMessage) {
+        this.testSuiteSpan.setTag('error', new Error(errorMessage))
+      }
+      this.testSuiteSpan.finish()
+      this.tracer._exporter._writer.flush()
     })
 
     this.addSub('ci:jest:test:start', (test) => {
@@ -108,15 +118,6 @@ class JestPlugin extends Plugin {
       span.setTag(TEST_STATUS, status)
       span.finish()
       finishAllTraceSpans(span)
-    })
-
-    this.addSub('ci:jest:test-suite:finish', ({ status, errorMessage }) => {
-      this.testSuiteSpan.setTag(TEST_STATUS, status)
-      if (errorMessage) {
-        this.testSuiteSpan.setTag('error', new Error(errorMessage))
-      }
-      this.testSuiteSpan.finish()
-      this.tracer._exporter._writer.flush()
     })
 
     this.addSub('ci:jest:test:err', (error) => {
