@@ -134,6 +134,11 @@ class Config {
       false
     )
 
+    const DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH = coalesce(
+      process.env.DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH,
+      '512'
+    )
+
     let appsec = options.appsec || (options.experimental && options.experimental.appsec)
 
     const DD_APPSEC_ENABLED = coalesce(
@@ -239,6 +244,7 @@ ken|consumer_?(?:id|key|secret)|sign(?:ed|ature)?|auth(?:entication|orization)?)
     this.startupLogs = isTrue(DD_TRACE_STARTUP_LOGS)
     this.telemetryEnabled = isTrue(DD_TRACE_TELEMETRY_ENABLED)
     this.protocolVersion = DD_TRACE_AGENT_PROTOCOL_VERSION
+    this.tagsHeaderMaxLength = parseInt(DD_TRACE_X_DATADOG_TAGS_MAX_LENGTH)
     this.appsec = {
       enabled: isTrue(DD_APPSEC_ENABLED),
       rules: DD_APPSEC_RULES,
