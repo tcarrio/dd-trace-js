@@ -167,7 +167,7 @@ describe('PrioritySampler', () => {
       context._tags['service.name'] = 'test'
 
       prioritySampler = new PrioritySampler('test', {
-        rules: [
+        samplingRules: [
           { sampleRate: 0, service: 'foo' },
           { sampleRate: 1, service: 'test' }
         ]
@@ -181,7 +181,7 @@ describe('PrioritySampler', () => {
       context._tags['service.name'] = 'test'
 
       prioritySampler = new PrioritySampler('test', {
-        rules: [
+        samplingRules: [
           { sampleRate: 0, service: /fo/ },
           { sampleRate: 1, service: /tes/ }
         ]
@@ -196,7 +196,7 @@ describe('PrioritySampler', () => {
       context._tags['service.name'] = 'test'
 
       prioritySampler = new PrioritySampler('test', {
-        rules: [
+        samplingRules: [
           { sampleRate: 0, name: 'bar' },
           { sampleRate: 1, name: 'foo' }
         ]
@@ -211,7 +211,7 @@ describe('PrioritySampler', () => {
       context._tags['service.name'] = 'test'
 
       prioritySampler = new PrioritySampler('test', {
-        rules: [
+        samplingRules: [
           { sampleRate: 0, name: /ba/ },
           { sampleRate: 1, name: /fo/ }
         ]
@@ -226,7 +226,7 @@ describe('PrioritySampler', () => {
 
       prioritySampler = new PrioritySampler('test', {
         sampleRate: 1,
-        rules: [
+        samplingRules: [
           { sampleRate: 0, name: 'bar' }
         ]
       })
