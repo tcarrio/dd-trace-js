@@ -190,7 +190,7 @@ ken|consumer_?(?:id|key|secret)|sign(?:ed|ature)?|auth(?:entication|orization)?)
         process.env.DD_TRACE_SAMPLE_RATE
       ),
       rateLimit: coalesce(options.rateLimit, ingestion.rateLimit, process.env.DD_TRACE_RATE_LIMIT),
-      rules: coalesce(options.samplingRules, process.env.DD_TRACE_SAMPLING_RULES, {})
+      samplingRules: coalesce(options.samplingRules, process.env.DD_TRACE_SAMPLING_RULES, {})
     }
 
     const inAWSLambda = process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined

@@ -154,7 +154,7 @@ describe('Config', () => {
     expect(config.tags).to.include({ service: 'service', 'version': '1.0.0', 'env': 'test' })
     expect(config).to.have.deep.nested.property('sampler', { sampleRate: '0.5',
       rateLimit: '-1',
-      rules: [
+      samplingRules: [
         { 'service': 'usersvc', 'name': 'healthcheck', 'sample_rate': 0.0 },
         { 'service': 'usersvc', 'sample_rate': 0.5 },
         { 'service': 'authsvc', 'sample_rate': 1.0 },
@@ -288,7 +288,7 @@ describe('Config', () => {
     expect(config).to.have.deep.nested.property('sampler', {
       sampleRate: 0.5,
       rateLimit: 1000,
-      rules: [
+      samplingRules: [
         { 'service': 'usersvc', 'name': 'healthcheck', 'sample_rate': 0.0 },
         { 'service': 'usersvc', 'sample_rate': 0.5 },
         { 'service': 'authsvc', 'sample_rate': 1.0 },
