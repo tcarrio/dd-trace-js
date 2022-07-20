@@ -268,6 +268,18 @@ export declare interface TracerOptions {
   sampleRate?: number;
 
   /**
+   * Global rate limit that is applied on the global sample rate and all rules.
+   * @default 100
+   */
+  rateLimit?: Number,
+
+  /**
+   * Sampling rules to apply to priority sampling.
+   * @default []
+   */
+  samplingRules?: SamplingRule[]
+
+  /**
    * Interval in milliseconds at which the tracer will submit traces to the agent.
    * @default 2000
    */
@@ -331,28 +343,6 @@ export declare interface TracerOptions {
      * @default false
      */
     exporter?: 'log' | 'agent'
-
-    /**
-     * Configuration of the priority sampler. Supports a global config and rules by span name or service name. The first matching rule is applied, and if no rule matches it falls back to the global config or on the rates provided by the agent if there is no global config.
-     */
-    sampler?: {
-      /**
-       * Sample rate to apply globally when no other rule is matched. Omit to fallback on the dynamic rates returned by the agent instead.
-       */
-      sampleRate?: Number,
-
-      /**
-       * Global rate limit that is applied on the global sample rate and all rules.
-       * @default 100
-       */
-      rateLimit?: Number,
-
-      /**
-       * Sampling rules to apply to priority sampling.
-       * @default []
-       */
-      rules?: SamplingRule[]
-    }
 
     /**
      * Whether to enable the experimental `getRumData` method.
