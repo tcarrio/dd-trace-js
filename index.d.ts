@@ -325,10 +325,10 @@ export declare interface TracerOptions {
   };
 
   /**
-   * Experimental features can be enabled all at once by using true or individually using key / value pairs.
+   * Experimental features can be enabled individually using key / value pairs.
    * @default {}
    */
-  experimental?: boolean | {
+  experimental?: {
     b3?: boolean
     traceparent?: boolean
 
